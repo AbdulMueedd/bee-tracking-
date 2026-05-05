@@ -50,7 +50,7 @@ def train_baseline(splits_dir, label_pct, epochs=50, base_model="yolo11n.pt"):
 
     print(f"\nTraining supervised baseline ({label_pct}% labels)...")
     model = YOLO(base_model)
-    model.train(
+    train_results = model.train(
         data=str(yaml_path),
         epochs=epochs,
         imgsz=480,
@@ -68,9 +68,20 @@ def train_baseline(splits_dir, label_pct, epochs=50, base_model="yolo11n.pt"):
         patience=50,
     )
 
-    best_path = results_dir / "train" / "weights" / "best.pt"
+    # Find the best model — Ultralytics may save to project dir or runs/detect/
+    save_dir = Path(train_results.save_dir) if hasattr(train_results, 'save_dir') else results_dir / "train"
+    best_path = save_dir / "weights" / "best.pt"
     if not best_path.exists():
-        best_path = results_dir / "train" / "weights" / "last.pt"
+        best_path = save_dir / "weights" / "last.pt"
+    if not best_path.exists():
+        import glob
+        candidates = glob.glob(str(results_dir / "**" / "weights" / "best.pt"), recursive=True)
+        if not candidates:
+            candidates = glob.glob("runs/**/weights/best.pt", recursive=True)
+        if candidates:
+            best_path = Path(sorted(candidates)[-1])
+        else:
+            raise FileNotFoundError(f"Cannot find trained weights in {results_dir} or runs/")
 
     metrics = evaluate_model(str(best_path), str(yaml_path))
     metrics["method"] = "supervised"
@@ -309,4 +320,4 @@ if __name__ == "__main__":
         print(f"  Precision: {metrics['precision']}")
         print(f"  Recall:    {metrics['recall']}")
     else:
-        run_full_evaluation(args.splits_dir, args.epochs, args.model)
+        run_full_evaluation(args.splits_dir, args.epochs, args.model) 
