@@ -37,15 +37,15 @@ import cv2
 
 def extract_embeddings(image_dir, model_path):
     """
-    Extract feature embeddings from frames using YOLO backbone.
+    Extract feature embeddings from frames using YOLO detection statistics.
     Returns (embeddings, frame_stems) where embeddings is (N, D) array.
     """
     from ultralytics import YOLO
-    import torch
 
     model = YOLO(model_path)
     image_dir = Path(image_dir)
-    img_files = sorted(image_dir.glob("*.jpg"))
+    IMG_EXTS = {'.jpg', '.jpeg', '.png', '.bmp', '.tiff'}
+    img_files = sorted([f for f in image_dir.glob("*") if f.suffix.lower() in IMG_EXTS])
 
     print(f"Extracting embeddings from {len(img_files)} frames...")
 
@@ -53,26 +53,9 @@ def extract_embeddings(image_dir, model_path):
     stems = []
 
     for i, img_path in enumerate(img_files):
-        img = cv2.imread(str(img_path))
-        img_resized = cv2.resize(img, (640, 640))
-
-        # Convert to tensor
-        img_tensor = torch.from_numpy(img_resized).permute(2, 0, 1).float() / 255.0
-        img_tensor = img_tensor.unsqueeze(0)
-
-        # Extract features from backbone (before detection head)
-        # Use the model's predict with embed parameter for feature extraction
-        results = model.predict(str(img_path), verbose=False, embed=[10])
-
-        if results and results[0].probs is not None:
-            emb = results[0].probs.data.cpu().numpy().flatten()
-        elif hasattr(results[0], '_embed') and results[0]._embed is not None:
-            emb = np.array(results[0]._embed).flatten()
-        else:
-            # Fallback: use detection-based features
-            # Count detections and aggregate box features as embedding
-            emb = _detection_features(model, str(img_path))
-
+        # Use detection-based features as embedding
+        # This captures: number of bees, confidence, spatial distribution, sizes
+        emb = _detection_features(model, str(img_path))
         embeddings.append(emb)
         stems.append(img_path.stem)
 
@@ -145,7 +128,8 @@ def create_frame_labels(image_dir, label_dir):
     label_dir = Path(label_dir)
 
     labels = {}
-    for img_path in sorted(image_dir.glob("*.jpg")):
+    IMG_EXTS = {'.jpg', '.jpeg', '.png', '.bmp', '.tiff'}
+    for img_path in sorted([f for f in image_dir.glob("*") if f.suffix.lower() in IMG_EXTS]):
         lbl_path = label_dir / f"{img_path.stem}.txt"
         if lbl_path.exists():
             with open(lbl_path) as f:
@@ -176,9 +160,11 @@ def run_label_propagation(splits_dir, label_pct, k, alpha, model_path):
     unlabeled_dir = splits_dir / f"unlabeled_{label_pct}pct"
     full_labeled_dir = splits_dir / "labeled_100pct"  # for ground truth
 
+    IMG_EXTS = {'.jpg', '.jpeg', '.png', '.bmp', '.tiff'}
+
     # ── Collect all frames ──
-    labeled_imgs = sorted((labeled_dir / "images").glob("*.jpg"))
-    unlabeled_imgs = sorted((unlabeled_dir / "images").glob("*.jpg"))
+    labeled_imgs = sorted([f for f in (labeled_dir / "images").iterdir() if f.suffix.lower() in IMG_EXTS])
+    unlabeled_imgs = sorted([f for f in (unlabeled_dir / "images").iterdir() if f.suffix.lower() in IMG_EXTS])
     all_stems = [f.stem for f in labeled_imgs] + [f.stem for f in unlabeled_imgs]
 
     print(f"Labeled frames: {len(labeled_imgs)}")
