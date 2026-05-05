@@ -21,8 +21,8 @@ from pathlib import Path
 
 # ── Settings ──────────────────────────────────────────────────────────────────
 
-VIDEO_PATH = "new_video.mp4"
-MODEL_PATH = "new_model.pt"
+VIDEO_PATH = "2024-10-25_1848.mp4"
+MODEL_PATH = "best.pt"
 OUTPUT_DIR = Path("output")
 
 FPS = 20.0
